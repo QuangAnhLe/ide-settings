@@ -116,6 +116,8 @@ exit - do not start anything.
 |`--dry-run` |Validate and print the exact `sbx run` command, then exit.
 |`--ca-cert <file>` |CA bundle to trust inside the sandbox (e.g. a corporate proxy
 CA); mounted read-only and exported as `NODE_EXTRA_CA_CERTS` / `SSL_CERT_FILE`.
+Always starts a *fresh* sandbox: a workspace mount can only be attached at
+sandbox creation, so `--ca-cert` cannot re-attach to an existing sandbox.
 |`--api-key <value>` |API key for the agent (default: Anthropic), passed as
 `ANTHROPIC_API_KEY` (also read from the host `IDEASY_SANDBOX_API_KEY`).
 |`--env NAME=VALUE` |Extra environment variable for the agent (repeatable), e.g.

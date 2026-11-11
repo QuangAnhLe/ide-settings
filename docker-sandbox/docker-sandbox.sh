@@ -100,7 +100,9 @@ Options:
                         exit - do not start the sandbox.
   --ca-cert <file>      CA bundle to trust inside the sandbox (e.g. a corporate
                         proxy CA). Mounted read-only and exported as
-                        NODE_EXTRA_CA_CERTS / SSL_CERT_FILE.
+                        NODE_EXTRA_CA_CERTS / SSL_CERT_FILE. Always starts a
+                        FRESH sandbox: a workspace mount can only be attached at
+                        sandbox creation, so --ca-cert cannot re-attach.
   --api-key <value>     API key for the agent (default: Anthropic), passed as
                         ANTHROPIC_API_KEY. Also read from the host
                         IDEASY_SANDBOX_API_KEY env var.
@@ -283,9 +285,16 @@ build_sbx_cmd() {
     SBX_CMD+=(--image "$IMAGE")
   fi
 
-  # --pull: create a fresh, disposable sandbox with the latest image instead of
-  # re-attaching to an existing one.
-  if [ "$PULL" -eq 1 ]; then
+  # A run starts a FRESH, disposable sandbox (latest image, removed on exit)
+  # when --pull is given, and *always* when --ca-cert is used: the CA bundle is
+  # a workspace mount, and sbx only allows attaching a workspace at sandbox
+  # *creation* - it refuses to add a workspace to an already-existing sandbox
+  # ("...already exists and can't be given new workspaces"). A --ca-cert run
+  # therefore cannot re-attach to a previous sandbox and always creates its own.
+  FRESH=0
+  [ "$PULL" -eq 1 ] && FRESH=1
+  [ -n "$CA_CERT_FILE" ] && FRESH=1
+  if [ "$FRESH" -eq 1 ]; then
     SBX_CMD+=(--name "sbx-$(date +%Y%m%d-%H%M%S)" --pull always --rm)
   fi
 
@@ -331,7 +340,10 @@ print_plan() {
   echo "  Agent           : ${AGENT}"
   echo "  Workspace       : ${WORKSPACE}  ->  ${WORKSPACE_SB}"
   echo "  Image           : ${IMAGE:-<sbx agent default>}"
-  echo "  Fresh sandbox   : $([ "$PULL" -eq 1 ] && echo 'yes (--pull, latest image, removed on exit)' || echo 'no (re-attach if one exists for this agent/workspace)')"
+  local fresh_reason=""
+  [ "$PULL" -eq 1 ] && fresh_reason="--pull"
+  [ -n "$CA_CERT_FILE" ] && fresh_reason="${fresh_reason:+$fresh_reason+}--ca-cert (creation-time mount)"
+  echo "  Fresh sandbox   : $([ -n "$fresh_reason" ] && echo "yes (${fresh_reason}, latest image, removed on exit)" || echo 'no (re-attach if one exists for this agent/workspace)')"
   echo "  API key         : $([ -n "$API_KEY" ] && echo 'present (value hidden)' || echo '<none>')"
   local envnames=()
   local kv
